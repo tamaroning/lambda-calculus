@@ -5,7 +5,7 @@ use chumsky::Parser;
 enum Term {
     Lit(Lit),
     Var(Var),
-    Abs(Var, Box<Type>, Box<Term>),
+    Abs(Var, Type, Box<Term>),
     App(Box<Term>, Box<Term>),
 }
 
@@ -39,8 +39,8 @@ enum Type {
 fn parser() -> impl Parser<char, Term, Error = Simple<char>> {
     let lambda = just("lambda").padded();
     let dot = just(".").padded();
-    let open_paren = just("(").padded().debug("(");
-    let close_paren = just(")").padded().debug(")");
+    let open_paren = just("(").padded();
+    let close_paren = just(")").padded();
     let colon = just(":").padded();
     let arrow = just("->").padded();
 
@@ -79,7 +79,7 @@ fn parser() -> impl Parser<char, Term, Error = Simple<char>> {
     let term = recursive(|term| {
         // Syntax
         //   atom ::= <ident> | <lit> | "(" term ")"
-        //   app  ::= atom atom
+        //   app  ::= atom term
         //   abs  ::= lambda <ident> : <Type> "." term
         //   term ::= abs | app | atom
         let paren_term = open_paren
@@ -91,7 +91,7 @@ fn parser() -> impl Parser<char, Term, Error = Simple<char>> {
 
         let app = atom
             .clone() // abs and app don't come first
-            .then(atom.clone())
+            .then(term.clone())
             .map(|(l, r)| Term::App(Box::new(l), Box::new(r)))
             .debug("app");
 
@@ -100,7 +100,7 @@ fn parser() -> impl Parser<char, Term, Error = Simple<char>> {
             .then(ty_annot)
             .then_ignore(dot)
             .then(term)
-            .map(|((var, arg_ty), body)| Term::Abs(var, Box::new(arg_ty), Box::new(body)))
+            .map(|((var, arg_ty), body)| Term::Abs(var, arg_ty, Box::new(body)))
             .debug("abs");
 
         // Priority
@@ -139,9 +139,9 @@ impl Typing for Term {
         match self {
             Term::Lit(lit) => lit.typing(ctx),
             Term::Abs(var, argty, body) => {
-                ctx.0.push((var.clone(), *argty.clone()));
+                ctx.0.push((var.clone(), argty.clone()));
                 let retty = body.typing(ctx)?;
-                let fnty = Type::Fn(argty.clone(), Box::new(retty));
+                let fnty = Type::Fn(Box::new(argty.clone()), Box::new(retty));
                 Ok(fnty)
             }
             Term::Var(var) => match ctx.get_type(var) {
@@ -203,41 +203,125 @@ fn debug_parse(src: &str) -> (Option<Term>, Vec<Simple<char>>) {
 
 #[test]
 fn parse_ok() {
+    // var
+    let (term, _) = debug_parse("var1");
+    assert_eq!(term, Some(Term::Var(Var::new("var1".to_string()))));
+
+    // lit
     let (term, _) = debug_parse("unit");
     assert_eq!(term, Some(Term::Lit(Lit::Unit)));
 
+    // abs
     let (term, _) = debug_parse("lambda x: Unit. x");
     assert_eq!(
         term,
         Some(Term::Abs(
             Var::new("x".to_string()),
-            Box::new(Type::Unit),
+            Type::Unit,
             Box::new(Term::Var(Var::new("x".to_string())))
         ))
     );
 
+    // (ident)
+    let (term, _) = debug_parse("(x)");
+    assert_eq!(term, Some(Term::Var(Var::new("x".to_string()))));
+
+    // (lit)
+    let (term, _) = debug_parse("(unit)");
+    assert_eq!(term, Some(Term::Lit(Lit::Unit)));
+
+    // ((lit))
+    let (term, _) = debug_parse("(( unit ))");
+    assert_eq!(term, Some(Term::Lit(Lit::Unit)));
+
+    // abs abs
+    let (term, _) = debug_parse("lambda x: Unit -> Unit. lambda y: Unit. x y");
+    assert_eq!(
+        term,
+        Some(Term::Abs(
+            Var::new("x".to_string()),
+            Type::Fn(Box::new(Type::Unit), Box::new(Type::Unit)),
+            Box::new(Term::Abs(
+                Var::new("y".to_string()),
+                Type::Unit,
+                Box::new(Term::App(
+                    Box::new(Term::Var(Var::new("x".to_string()))),
+                    Box::new(Term::Var(Var::new("y".to_string()))),
+                ))
+            ))
+        ))
+    );
+
+    // ident ident
+    let (term, _) = debug_parse("x x");
+    assert_eq!(
+        term,
+        Some(Term::App(
+            Box::new(Term::Var(Var::new("x".to_string()))),
+            Box::new(Term::Var(Var::new("x".to_string())))
+        ))
+    );
+
+    // ident ident ident
+    let (term, _) = debug_parse("x y z");
+    assert_eq!(
+        term,
+        Some(Term::App(
+            Box::new(Term::Var(Var::new("x".to_string()))),
+            Box::new(Term::App(
+                Box::new(Term::Var(Var::new("y".to_string()))),
+                Box::new(Term::Var(Var::new("z".to_string())))
+            ))
+        ))
+    );
+
+    // (abs) lit
     let (term, _) = debug_parse("(lambda x: Unit. x) unit");
     assert_eq!(
         term,
         Some(Term::App(
             Box::new(Term::Abs(
                 Var::new("x".to_string()),
-                Box::new(Type::Unit),
+                Type::Unit,
                 Box::new(Term::Var(Var::new("x".to_string())))
             )),
             Box::new(Term::Lit(Lit::Unit))
         ))
     );
 
-    let (term, _) = debug_parse("(unit)");
-    assert_eq!(term, Some(Term::Lit(Lit::Unit)));
-
-    let (term, _) = debug_parse("(( unit ))");
-    assert_eq!(term, Some(Term::Lit(Lit::Unit)));
+    // (abs) (abs) lit
+    let (term, _) = debug_parse("(lambda x: Unit. x) (lambda x: Unit. x) unit");
+    assert_eq!(
+        term,
+        Some(Term::App(
+            Box::new(Term::Abs(
+                Var::new("x".to_string()),
+                Type::Unit,
+                Box::new(Term::Var(Var::new("x".to_string())))
+            )),
+            Box::new(Term::App(
+                Box::new(Term::Abs(
+                    Var::new("x".to_string()),
+                    Type::Unit,
+                    Box::new(Term::Var(Var::new("x".to_string())))
+                )),
+                Box::new(Term::Lit(Lit::Unit))
+            ))
+        ))
+    );
 }
 
 #[test]
-fn parse_err() {}
+fn parse_err() {
+    let (term, _) = debug_parse("lambda (x): Unit. x");
+    assert_eq!(term, None);
+
+    let (term, _) = debug_parse("((unit)");
+    assert_eq!(term, None);
+
+    let (term, _) = debug_parse("unit)");
+    assert_eq!(term, None);
+}
 
 #[allow(unused)]
 #[cfg(test)]
