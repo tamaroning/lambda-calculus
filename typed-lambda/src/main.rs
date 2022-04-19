@@ -80,17 +80,17 @@ fn parser() -> impl Parser<char, Term, Error = Simple<char>> {
         // Syntax
         //   atom ::= <ident> | <lit> | "(" term ")"
         //   app  ::= atom atom
-        //   abs  ::= lambda <ident> : <Type> "." term 
+        //   abs  ::= lambda <ident> : <Type> "." term
         //   term ::= abs | app | atom
         let paren_term = open_paren
             .ignore_then(term.clone())
             .then_ignore(close_paren)
             .debug("paren_term");
-        
+
         let atom = choice((lit.map(Term::Lit), ident.clone().map(Term::Var), paren_term));
 
-        let app = 
-            atom.clone() // abs and app don't come first
+        let app = atom
+            .clone() // abs and app don't come first
             .then(atom.clone())
             .map(|(l, r)| Term::App(Box::new(l), Box::new(r)))
             .debug("app");
@@ -105,8 +105,7 @@ fn parser() -> impl Parser<char, Term, Error = Simple<char>> {
 
         // Priority
         //   Abs > App > Lit > Ident > "("Term")"
-        choice((abs, app, atom))
-            .debug("term")
+        choice((abs, app, atom)).debug("term")
     });
 
     term.then_ignore(end())
@@ -229,7 +228,7 @@ fn parse_ok() {
             Box::new(Term::Lit(Lit::Unit))
         ))
     );
-    
+
     let (term, _) = debug_parse("(unit)");
     assert_eq!(term, Some(Term::Lit(Lit::Unit)));
 
@@ -238,8 +237,7 @@ fn parse_ok() {
 }
 
 #[test]
-fn parse_err() {
-}
+fn parse_err() {}
 
 #[allow(unused)]
 #[cfg(test)]
