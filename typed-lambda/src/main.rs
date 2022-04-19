@@ -76,20 +76,22 @@ fn parser() -> impl Parser<char, Term, Error = Simple<char>> {
         .map(Var::new)
         .debug("ident");
 
-    // Atomic
-    let atom = choice((lit.map(Term::Lit), ident.clone().map(Term::Var)));
-
-    recursive(|term| {
-        let paren_term = term
-            .clone()
-            .delimited_by(open_paren, close_paren)
+    let term = recursive(|term| {
+        // Syntax
+        //   atom ::= <ident> | <lit> | "(" term ")"
+        //   app  ::= atom atom
+        //   abs  ::= lambda <ident> : <Type> "." term 
+        //   term ::= abs | app | atom
+        let paren_term = open_paren
+            .ignore_then(term.clone())
+            .then_ignore(close_paren)
             .debug("paren_term");
+        
+        let atom = choice((lit.map(Term::Lit), ident.clone().map(Term::Var), paren_term));
 
-        let smallest = choice((atom, paren_term));
-
-        let app = smallest // abs and app don't come first
-            .clone()
-            .then(term.clone())
+        let app = 
+            atom.clone() // abs and app don't come first
+            .then(atom.clone())
             .map(|(l, r)| Term::App(Box::new(l), Box::new(r)))
             .debug("app");
 
@@ -102,12 +104,12 @@ fn parser() -> impl Parser<char, Term, Error = Simple<char>> {
             .debug("abs");
 
         // Priority
-        // Abs > App > Lit > Ident > "("Term")"
-        choice((abs, app, smallest))
-            .then_ignore(end())
+        //   Abs > App > Lit > Ident > "("Term")"
+        choice((abs, app, atom))
             .debug("term")
-        //smallest.then_ignore(end())
-    })
+    });
+
+    term.then_ignore(end())
 }
 
 type TypingResult = Result<Type, String>;
@@ -195,7 +197,6 @@ fn main() {
     println!("term: {:?}", ty);
 }
 
-#[cfg(test)]
 fn debug_parse(src: &str) -> (Option<Term>, Vec<Simple<char>>) {
     let parser = parser();
     parser.parse_recovery_verbose(src)
@@ -216,9 +217,40 @@ fn parse_ok() {
         ))
     );
 
-    let (term, _) = debug_parse("( unit )");
+    let (term, _) = debug_parse("(lambda x: Unit. x) unit");
+    assert_eq!(
+        term,
+        Some(Term::App(
+            Box::new(Term::Abs(
+                Var::new("x".to_string()),
+                Box::new(Type::Unit),
+                Box::new(Term::Var(Var::new("x".to_string())))
+            )),
+            Box::new(Term::Lit(Lit::Unit))
+        ))
+    );
+    
+    let (term, _) = debug_parse("(unit)");
+    assert_eq!(term, Some(Term::Lit(Lit::Unit)));
+
+    let (term, _) = debug_parse("(( unit ))");
     assert_eq!(term, Some(Term::Lit(Lit::Unit)));
 }
 
 #[test]
-fn parse_err() {}
+fn parse_err() {
+}
+
+#[allow(unused)]
+#[cfg(test)]
+//#[test]
+fn debug_test() {
+    let (term, e) = debug_parse("(unit)");
+    for e in &e {
+        println!("Error: {:?}", e)
+    }
+    let term = term.unwrap();
+    println!("Parse OK");
+    assert_eq!(term, Term::Lit(Lit::Unit));
+    panic!()
+}
