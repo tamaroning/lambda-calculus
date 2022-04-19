@@ -5,7 +5,7 @@ use chumsky::Parser;
 pub enum Term {
     Lit(Lit),
     Var(Var),
-    Abs(Var, Type, Box<Term>),
+    Abs(Var, Option<Type>, Box<Term>),
     App(Box<Term>, Box<Term>),
 }
 
@@ -80,7 +80,7 @@ pub fn parser() -> impl Parser<char, Term, Error = Simple<char>> {
         // Syntax
         //   atom ::= <ident> | <lit> | "(" term ")"
         //   app  ::= atom term
-        //   abs  ::= lambda <ident> : <Type> "." term
+        //   abs  ::= lambda <ident> (":" <Type>)? "." term
         //   term ::= abs | app | atom
         let paren_term = open_paren
             .ignore_then(term.clone())
@@ -100,7 +100,7 @@ pub fn parser() -> impl Parser<char, Term, Error = Simple<char>> {
             .then(ty_annot)
             .then_ignore(dot)
             .then(term)
-            .map(|((var, arg_ty), body)| Term::Abs(var, arg_ty, Box::new(body)))
+            .map(|((var, arg_ty), body)| Term::Abs(var, Some(arg_ty), Box::new(body)))
             .debug("abs");
 
         // Priority
@@ -133,7 +133,7 @@ fn parse_ok() {
         term,
         Some(Term::Abs(
             Var::new("x".to_string()),
-            Type::Unit,
+            Some(Type::Unit),
             Box::new(Term::Var(Var::new("x".to_string())))
         ))
     );
@@ -156,10 +156,10 @@ fn parse_ok() {
         term,
         Some(Term::Abs(
             Var::new("x".to_string()),
-            Type::Fn(Box::new(Type::Unit), Box::new(Type::Unit)),
+            Some(Type::Fn(Box::new(Type::Unit), Box::new(Type::Unit))),
             Box::new(Term::Abs(
                 Var::new("y".to_string()),
-                Type::Unit,
+                Some(Type::Unit),
                 Box::new(Term::App(
                     Box::new(Term::Var(Var::new("x".to_string()))),
                     Box::new(Term::Var(Var::new("y".to_string()))),
@@ -198,7 +198,7 @@ fn parse_ok() {
         Some(Term::App(
             Box::new(Term::Abs(
                 Var::new("x".to_string()),
-                Type::Unit,
+                Some(Type::Unit),
                 Box::new(Term::Var(Var::new("x".to_string())))
             )),
             Box::new(Term::Lit(Lit::Unit))
@@ -212,13 +212,13 @@ fn parse_ok() {
         Some(Term::App(
             Box::new(Term::Abs(
                 Var::new("x".to_string()),
-                Type::Unit,
+                Some(Type::Unit),
                 Box::new(Term::Var(Var::new("x".to_string())))
             )),
             Box::new(Term::App(
                 Box::new(Term::Abs(
                     Var::new("x".to_string()),
-                    Type::Unit,
+                    Some(Type::Unit),
                     Box::new(Term::Var(Var::new("x".to_string())))
                 )),
                 Box::new(Term::Lit(Lit::Unit))

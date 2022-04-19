@@ -27,10 +27,15 @@ impl Typing for Term {
     fn typing(&self, ctx: &mut TypingContext) -> TypingResult {
         match self {
             Term::Lit(lit) => lit.typing(ctx),
-            Term::Abs(var, argty, body) => {
+            Term::Abs(var, ref argty, body) => {
+                if argty.is_none() {
+                    unimplemented!("infer type")
+                }
+                let argty = argty.clone().unwrap();
+
                 ctx.0.push((var.clone(), argty.clone()));
                 let retty = body.typing(ctx)?;
-                let fnty = Type::Fn(Box::new(argty.clone()), Box::new(retty));
+                let fnty = Type::Fn(Box::new(argty), Box::new(retty));
                 Ok(fnty)
             }
             Term::Var(var) => match ctx.get_type(var) {
