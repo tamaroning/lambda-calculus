@@ -5,8 +5,11 @@ Please see README.md s in each folder.
 ## untyped-lambda-calculus
 ### Features
 - remove_names: converts lambda terms into terms with de Bruijn's indices
+- (unimplemented) Evaluation
 
 ## typed-lambda-calculus
-- (unimplemented) Suger syntax
-- (unimplemented) Base types = Unit, Bool, and Nat
+- Typing
+- Constraint Typing
+- Base types = Unit, Bool, (implemented) and Nat(unimplemented)
 - (unimplemented) Hindley-Milner type inference
+- (unimplemented) Suger syntax
