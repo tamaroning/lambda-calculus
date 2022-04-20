@@ -51,6 +51,23 @@ impl Typing for Term {
                     _ => Err(format!("Couldn't apply `{:?}` to `{:?}`", l_ty, r_ty)),
                 }
             }
+            Term::If(cond, then, els) => {
+                let cond_ty = cond.typing(ctx)?;
+                match cond_ty {
+                    Type::Bool => {
+                        let (then_ty, els_ty) = (then.typing(ctx)?, els.typing(ctx)?);
+                        if then_ty == els_ty {
+                            Ok(then_ty)
+                        } else {
+                            Err(format!(
+                                "Types mismatch: then : `{:?}` and else: `{:?}`",
+                                then_ty, els_ty
+                            ))
+                        }
+                    }
+                    _ => Err(format!("Expected `Bool`, but found `{:?}`", cond_ty)),
+                }
+            }
         }
     }
 }

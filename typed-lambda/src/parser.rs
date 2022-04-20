@@ -7,6 +7,7 @@ pub enum Term {
     Var(Var),
     Abs(Var, Option<Type>, Box<Term>),
     App(Box<Term>, Box<Term>),
+    If(Box<Term>, Box<Term>, Box<Term>),
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -37,7 +38,13 @@ pub enum Type {
 }
 
 pub fn parser() -> impl Parser<char, Term, Error = Simple<char>> {
-    let lambda = just("lambda").padded();
+    let lambda_kw = just("lambda").padded();
+    let in_kw = just("let").padded();
+    let let_kw = just("in").padded();
+    let if_kw = just("if").padded();
+    let then_kw = just("then").padded();
+    let else_kw = just("else").padded();
+    let eq = just("=").padded();
     let dot = just(".").padded();
     let open_paren = just("(").padded();
     let close_paren = just(")").padded();
@@ -95,17 +102,45 @@ pub fn parser() -> impl Parser<char, Term, Error = Simple<char>> {
             .map(|(l, r)| Term::App(Box::new(l), Box::new(r)))
             .debug("app");
 
-        let abs = lambda
-            .ignore_then(ident)
-            .then(ty_annot)
+        let abs = lambda_kw
+            .ignore_then(ident.clone())
+            .then(ty_annot.clone())
             .then_ignore(dot)
-            .then(term)
+            .then(term.clone())
             .map(|((var, arg_ty), body)| Term::Abs(var, Some(arg_ty), Box::new(body)))
             .debug("abs");
 
+        // FIXME:
+        let if_else = if_kw
+            .ignore_then(term.clone())
+            .then_ignore(then_kw)
+            .then(term.clone())
+            .then_ignore(else_kw)
+            .then(term.clone())
+            .map(|((cond, then), els)| Term::If(Box::new(cond), Box::new(then), Box::new(els)));
+
+        // Suger Syntax
+        // let x : T = t1 in t
+        // (lambda x: T. t) t1
+        // FIXME: not working
+        let sugar_let = let_kw
+            .ignore_then(ident)
+            .then(ty_annot)
+            .then_ignore(eq)
+            .then_ignore(in_kw)
+            .then(term.clone())
+            .then_ignore(in_kw)
+            .then(term)
+            .map(|(((id, argty), t1), t)| {
+                Term::App(
+                    Box::new(Term::Abs(id, Some(argty), Box::new(t))),
+                    Box::new(t1),
+                )
+            });
+
         // Priority
         //   Abs > App > Lit > Ident > "("Term")"
-        choice((abs, app, atom)).debug("term")
+        choice((sugar_let, if_else, abs, app, atom)).debug("term")
     });
 
     term.then_ignore(end())
@@ -239,6 +274,9 @@ fn parse_err() {
     assert_eq!(term, None);
 
     let (term, _) = debug_parse("unit)");
+    assert_eq!(term, None);
+
+    let (term, _) = debug_parse("let x : Unit = unit in x");
     assert_eq!(term, None);
 }
 
