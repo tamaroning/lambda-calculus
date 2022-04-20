@@ -1,4 +1,4 @@
-use crate::parser::*;
+use crate::{parser::*, ty::Type};
 
 pub type TypingResult = Result<Type, String>;
 
@@ -9,7 +9,7 @@ impl TypingContext {
         TypingContext(pairs)
     }
 
-    fn get_type(&self, x: &Var) -> Option<Type> {
+    pub fn get_type(&self, x: &Var) -> Option<Type> {
         for (var, ty) in self.0.iter().rev() {
             if *x == *var {
                 return Some(ty.clone());

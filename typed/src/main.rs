@@ -1,4 +1,7 @@
+mod constraint_ty;
+mod constraint_typing;
 mod parser;
+mod ty;
 mod typing;
 
 use chumsky::Parser;

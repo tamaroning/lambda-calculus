@@ -1,12 +1,7 @@
 use chumsky::prelude::*;
 use chumsky::Parser;
 
-#[derive(Debug)]
-enum Token {
-    Keyword(String),
-    Ident(String),
-    Symbol(String),
-}
+use crate::ty::Type;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Term {
@@ -33,15 +28,6 @@ pub enum Lit {
     Unit,
     True,
     False,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub enum Type {
-    // Base Types
-    Unit,
-    Bool,
-
-    Fn(Box<Type>, Box<Type>), // ->
 }
 
 pub fn parser() -> impl Parser<char, Term, Error = Simple<char>> {
