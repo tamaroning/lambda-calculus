@@ -1,6 +1,13 @@
 use chumsky::prelude::*;
 use chumsky::Parser;
 
+#[derive(Debug)]
+enum Token {
+    Keyword(String),
+    Ident(String),
+    Symbol(String),
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Term {
     Lit(Lit),
@@ -51,6 +58,8 @@ pub fn parser() -> impl Parser<char, Term, Error = Simple<char>> {
     let colon = just(":").padded();
     let arrow = just("->").padded();
 
+    //let keyword = choice((lambda_kw.clone(), in_kw.clone(), let_kw.clone(), if_kw.clone(), then_kw.clone(), else_kw.clone()));
+
     // type
     let unit = just("Unit").padded().to(Type::Unit);
     let bool = just("Bool").padded().to(Type::Bool);
@@ -79,6 +88,7 @@ pub fn parser() -> impl Parser<char, Term, Error = Simple<char>> {
 
     // Identifier
     let ident = text::ident::<char, Simple<char>>()
+        //.filter_map(|span: Span, s: String| { Err(Simple::custom(span, format!("'{}'", s))) })
         .padded()
         .map(Var::new)
         .debug("ident");
